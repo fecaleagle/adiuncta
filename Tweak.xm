@@ -56,10 +56,13 @@ static void loadBundles() {
         labels = nil;
     }
     
+    // get the scale factor for pulling icons
     NSString *scaleFactor = scale > 1 ? [NSString stringWithFormat:@"@%dx", scale] : @"";
     
+    // set the initial icon path for the preferences app
     settingsIconPath = [[[NSString alloc] initWithFormat:@"/Applications/Preferences.app/AppIcon60x60%@.png", scaleFactor] retain];
 
+    // set the initial tweakroot
     NSString *tweakRoot = @"prefs:root=%@";
     
     // check for PreferenceOrganizer2
@@ -74,7 +77,7 @@ static void loadBundles() {
         //NSLog(@"Adiuncta: Anemone is installed");
         if ( [[NSFileManager defaultManager] fileExistsAtPath:@"/User/Library/Preferences/com.anemoneteam.anemone.plist"] ) {
             NSDictionary *themes = [[NSMutableDictionary alloc] initWithContentsOfFile:@"/User/Library/Preferences/com.anemoneteam.anemone.plist"];
-            
+            // loop the keys and find the enabled theme components
             for (NSString *key in themes) {
                 NSLog(@"Adiuncta: %@", key);
                 if ( [[[themes objectForKey:key] objectForKey:@"Enabled"] boolValue] ) {
