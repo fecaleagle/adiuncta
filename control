@@ -1,0 +1,10 @@
+Package: net.bearlike.adiuncta
+Name: Adiuncta
+Depends: mobilesubstrate
+Version: 0.1
+Architecture: iphoneos-arm
+Description: Launch preference bundles via Spotlight.
+Depiction: http://repo.bearlike.net/depictions/adiuncta
+Maintainer: fecaleagle <fecaleagle@bearlike.net>
+Author: fecaleagle <fecaleagle@bearlike.net>
+Section: Tweaks (Beta)
