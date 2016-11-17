@@ -46,7 +46,6 @@
 
 static NSDictionary *labels;
 static int           scale = 1;
-static NSString     *device = @"~iphone";
 static NSString     *settingsIconPath;
 static NSString     *spotlightIconMask;
 
@@ -57,27 +56,28 @@ static void loadBundles() {
         labels = nil;
     }
     
+    // get the device and scaleFactor strings
+    NSString *device      = ( UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad ) ? @"~ipad" : @"~iphone";
     NSString *scaleFactor = scale > 1 ? [NSString stringWithFormat:@"@%dx", scale] : @"";
     
+    // initialize settingsIconPath with the default value
     settingsIconPath = [[[NSString alloc] initWithFormat:@"/Applications/Preferences.app/AppIcon60x60%@.png", scaleFactor] retain];
 
+    // initialize tweakRoot with the default value
     NSString *tweakRoot = @"prefs:root=%@";
     
     // check for PreferenceOrganizer2
     if ( [[NSFileManager defaultManager] fileExistsAtPath:@"/Library/MobileSubstrate/DynamicLibraries/PreferenceOrganizer2.dylib"] ) {
-        //NSLog(@"Adiuncta: PreferenceOrganizer2 is installed");
+        // since PreferenceOrganizer2 is installed, use the PreferenceOrganizer2-format URL
         tweakRoot = @"prefs:root=Tweaks&path=%@";
     }
-    //NSLog(@"Adiuncta: tweakRoot = %@", tweakRoot);
     
     // check for Anemone
     if ( [[NSFileManager defaultManager] fileExistsAtPath:@"/Library/MobileSubstrate/DynamicLibraries/Anemone.dylib"] ) {
-        //NSLog(@"Adiuncta: Anemone is installed");
         if ( [[NSFileManager defaultManager] fileExistsAtPath:@"/User/Library/Preferences/com.anemoneteam.anemone.plist"] ) {
             NSDictionary *themes = [[NSMutableDictionary alloc] initWithContentsOfFile:@"/User/Library/Preferences/com.anemoneteam.anemone.plist"];
             
             for (NSString *key in themes) {
-                //NSLog(@"Adiuncta: %@", key);
                 if ( [[[themes objectForKey:key] objectForKey:@"Enabled"] boolValue] ) {
                     // phew, found the perfect icon! that was easy...
                     if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/Library/Themes/%@.theme/IconBundles/com.apple.Preferences%@.png", key, scaleFactor]] ) {
@@ -99,7 +99,6 @@ static void loadBundles() {
                         
                         // while we have another file to check...
                         while ( (iconFile = [enumerator nextObject]) ) {
-                            //NSLog(@"Adiuncta: looping for icon in key %@", key);
                             // if we've got a potential icon for settings, add it to the candidates array
                             if ( [iconFile hasPrefix:@"com.apple.Preferences"] ) {
                                 [candidates addObject:iconFile];
@@ -179,7 +178,6 @@ static void loadBundles() {
                         
                         // while we have another file to check...
                         while ( (maskFile = [enumerator nextObject]) ) {
-                            //NSLog(@"Adiuncta: looping for mask in key %@", key);
                             // if we've got a potential mask for use in Spotlight, add it to the candidates array
                             if ( [maskFile hasPrefix:@"AppIconMask"] ) {
                                 [candidates addObject:maskFile];
@@ -342,18 +340,20 @@ static void loadBundles() {
         }
     }
     
+    // initialize the en_US locale for obtaining the language name in English
     NSLocale *locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US"];
+    // get the preferred language
     NSString *language = [[NSLocale preferredLanguages] objectAtIndex:0];
+    // now get the first component of the the language name
     NSString *name = [[[locale displayNameForKey:NSLocaleIdentifier value:language] componentsSeparatedByString:@" "] objectAtIndex:0];
-    //NSLog(@"Adiuncta: displayName = '%@'", name);
+    // replace the dash with an underscore if necessary
     language = [language stringByReplacingOccurrencesOfString:@"-" withString:@"_"];
-    //NSLog(@"Adiuncta: language = '%@'", language);
     
     // release the locale
     [locale release];
     locale = nil;
     
-    // don't know whether ipad has its own strings table, but try to use it
+    // don't know whether ipad has its own strings table, but try to lookup for the current device
     if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings%@.strings", language, device]] ) {
         plistContent = [[NSMutableDictionary alloc] initWithContentsOfFile:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings%@.strings", language, device]];
     } else if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings%@.strings", [language substringToIndex:2], device]] ) {
@@ -994,9 +994,6 @@ static UIImage *createIcon(UIImage *icon, CGSize size) {
 %end
 
 %ctor {
-    // get the device
-    device = ( UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad ) ? @"~ipad" : @"~iphone";
-    
     // get the device scale
     if ( [UIScreen mainScreen].scale == 3.0f ) {
         //scaleFactor = @"@3x";
