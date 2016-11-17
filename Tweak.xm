@@ -46,6 +46,7 @@
 
 static NSDictionary *labels;
 static int           scale = 1;
+static NSString     *device = @"~iphone";
 static NSString     *settingsIconPath;
 static NSString     *spotlightIconMask;
 
@@ -76,30 +77,169 @@ static void loadBundles() {
             NSDictionary *themes = [[NSMutableDictionary alloc] initWithContentsOfFile:@"/User/Library/Preferences/com.anemoneteam.anemone.plist"];
             
             for (NSString *key in themes) {
-                NSLog(@"Adiuncta: %@", key);
+                //NSLog(@"Adiuncta: %@", key);
                 if ( [[[themes objectForKey:key] objectForKey:@"Enabled"] boolValue] ) {
+                    // phew, found the perfect icon! that was easy...
                     if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/Library/Themes/%@.theme/IconBundles/com.apple.Preferences%@.png", key, scaleFactor]] ) {
                         [settingsIconPath release];
                         settingsIconPath = nil;
                         settingsIconPath = [[[NSString alloc] initWithFormat:@"/Library/Themes/%@.theme/IconBundles/com.apple.Preferences%@.png", key, scaleFactor] retain];
-                    } else if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/Library/Themes/%@.theme/IconBundles/com.apple.Preferences%@.jpg", key, scaleFactor]] ) {
+                    // take the large icon and get the hell out
+                    } else if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/Library/Themes/%@.theme/IconBundles/com.apple.Preferences-large.png", key]] ) {
                         [settingsIconPath release];
                         settingsIconPath = nil;
-                        settingsIconPath = [[[NSString alloc] initWithFormat:@"/Library/Themes/%@.theme/IconBundles/com.apple.Preferences%@.jpg", key, scaleFactor] retain];
+                        settingsIconPath = [[[NSString alloc] initWithFormat:@"/Library/Themes/%@.theme/IconBundles/com.apple.Preferences-large.png", key] retain];
+                    // else if we've got the appropriate directory to enumerate...
+                    } else if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/Library/Themes/%@.theme/IconBundles", key]] ) {
+                        // enumerate all files and folders under IconBundles for the given theme.
+                        NSDirectoryEnumerator *enumerator = [[NSFileManager defaultManager] enumeratorAtPath:[NSString stringWithFormat:@"/Library/Themes/%@.theme/IconBundles/", key]];
+                        // declare some objects to be used in the enumeration loop
+                        NSString *iconFile;
+                        NSMutableArray *candidates = [[NSMutableArray alloc] init];
+                        
+                        // while we have another file to check...
+                        while ( (iconFile = [enumerator nextObject]) ) {
+                            NSLog(@"Adiuncta: looping for icon in key %@", key);
+                            // if we've got a potential icon for settings, add it to the candidates array
+                            if ( [iconFile hasPrefix:@"com.apple.Preferences"] ) {
+                                [candidates addObject:iconFile];
+                            }
+                        }
+                        
+                        // if we've got a candidate, or god-forbid more than one...
+                        if ( [candidates count] > 0 ) {
+                            // if we've got multiple candidates, let's try to find the best one
+                            if ( [candidates count] > 1 ) {
+                                BOOL foundIcon = NO;
+                                NSString *goodCandidate = nil;
+                                
+                                for ( NSString *candidate in candidates ) {
+                                    // if we've got one that matches scaleFactor, use it
+                                    if ( [candidate containsString:scaleFactor] ) {
+                                        foundIcon = YES;
+                                    // or if we've got one that matches "large", consider it a good candidate
+                                    } else if ( [candidate containsString:@"large"] ) {
+                                        goodCandidate = [NSString stringWithString:candidate];
+                                    }
+                                    
+                                    // if we found something better than a random guess, use it
+                                    if ( foundIcon ) {
+                                        [settingsIconPath release];
+                                        settingsIconPath = nil;
+                                        settingsIconPath = [[[NSString alloc] initWithFormat:@"/Library/Themes/%@.theme/IconBundles/%@", key, candidate] retain];
+                                        // bug out of this abomination.
+                                        break;
+                                    }
+                                }
+                                
+                                // if we didn't find the exact icon in the array, check if we found a good one, and if not, then just use the first one in the candidates array
+                                if ( !foundIcon ) {
+                                    [settingsIconPath release];
+                                    settingsIconPath = nil;
+                                    if ( goodCandidate ) {
+                                        settingsIconPath = [[[NSString alloc] initWithFormat:@"/Library/Themes/%@.theme/IconBundles/%@", key, goodCandidate] retain];
+                                    } else {
+                                        settingsIconPath = [[[NSString alloc] initWithFormat:@"/Library/Themes/%@.theme/IconBundles/%@", key, [candidates objectAtIndex:0]] retain];
+                                    }
+                                }
+                            // thankfully, we just have one candidate, so use it
+                            } else {
+                                [settingsIconPath release];
+                                settingsIconPath = nil;
+                                settingsIconPath = [[[NSString alloc] initWithFormat:@"/Library/Themes/%@.theme/IconBundles/%@", key, [candidates objectAtIndex:0]] retain];
+                            }
+                        }
+                        
+                        // release candidates
+                        [candidates release];
+                        candidates = nil;
                     }
                     
-                    if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/Library/Themes/%@.theme/Bundles/com.apple.mobileicons.framework/AppIconMask%@~iphone.png", key, scaleFactor]] ) {
+                    // phew, found a perfect mask! that was easy...
+                    if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/Library/Themes/%@.theme/Bundles/com.apple.mobileicons.framework/AppIconMask%@%@.png", key, scaleFactor, device]] ) {
+                        if ( spotlightIconMask ) {
+                            [spotlightIconMask release];
+                            spotlightIconMask = nil;
+                        }
+                        spotlightIconMask = [[[NSString alloc] initWithFormat:@"/Library/Themes/%@.theme/Bundles/com.apple.mobileicons.framework/AppIconMask%@%@.png", key, scaleFactor, device] retain];
+                    // take the iphone mask and get the hell out
+                    } else if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/Library/Themes/%@.theme/Bundles/com.apple.mobileicons.framework/AppIconMask%@~iphone.png", key, scaleFactor]] ) {
                         if ( spotlightIconMask ) {
                             [spotlightIconMask release];
                             spotlightIconMask = nil;
                         }
                         spotlightIconMask = [[[NSString alloc] initWithFormat:@"/Library/Themes/%@.theme/Bundles/com.apple.mobileicons.framework/AppIconMask%@~iphone.png", key, scaleFactor] retain];
-                    } else if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/Library/Themes/%@.theme/Bundles/com.apple.mobileicons.framework/AppIconMask%@~iphone.jpg", key, scaleFactor]] ) {
-                        if ( spotlightIconMask ) {
-                            [spotlightIconMask release];
-                            spotlightIconMask = nil;
+                    // else if we've got the appropriate directory to enumerate...
+                    } else if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/Library/Themes/%@.theme/Bundles/com.apple.mobileicons.framework", key]] ) {
+                        // enumerate all files and folders under IconBundles for the given theme.
+                        NSDirectoryEnumerator *enumerator = [[NSFileManager defaultManager] enumeratorAtPath:[NSString stringWithFormat:@"/Library/Themes/%@.theme/Bundles/com.apple.mobileicons.framework", key]];
+                        // declare some objects to be used in the enumeration loop
+                        NSString *maskFile;
+                        NSMutableArray *candidates = [[NSMutableArray alloc] init];
+                        
+                        // while we have another file to check...
+                        while ( (maskFile = [enumerator nextObject]) ) {
+                            NSLog(@"Adiuncta: looping for mask in key %@", key);
+                            // if we've got a potential mask for use in Spotlight, add it to the candidates array
+                            if ( [maskFile hasPrefix:@"AppIconMask"] ) {
+                                [candidates addObject:maskFile];
+                            }
                         }
-                        spotlightIconMask = [[[NSString alloc] initWithFormat:@"/Library/Themes/%@.theme/Bundles/com.apple.mobileicons.framework/AppIconMask%@~iphone.jpg", key, scaleFactor] retain];
+                        
+                        // if we've got a candidate, or god-forbid more than one...
+                        if ( [candidates count] > 0 ) {
+                            // if we've got multiple candidates, let's try to find the best one
+                            if ( [candidates count] > 1 ) {
+                                BOOL foundIcon = NO;
+                                NSString *goodCandidate = nil;
+                                
+                                for ( NSString *candidate in candidates ) {
+                                    // if we've got one that matches scaleFactor, use it
+                                    if ( [candidate containsString:scaleFactor] && [candidate containsString:device] ) {
+                                        foundIcon = YES;
+                                    // or if we've got one that matches the scaleFactor at least, hold onto it.
+                                    } else if ( [candidate containsString:scaleFactor] ) {
+                                        goodCandidate = [NSString stringWithString:candidate];
+                                    }
+                                    
+                                    // if we found the ideal candidate, use it
+                                    if ( foundIcon ) {
+                                        if ( spotlightIconMask ) {
+                                            [spotlightIconMask release];
+                                            spotlightIconMask = nil;
+                                        }
+                                        spotlightIconMask = [[[NSString alloc] initWithFormat:@"/Library/Themes/%@.theme/Bundles/com.apple.mobileicons.framework/%@", key, candidate] retain];
+                                        // bug out of this abomination.
+                                        break;
+                                    }
+                                }
+                                
+                                // if we didn't find the exact mask in the array, check if we found a good one, and if not, then just use the first one in the candidates array
+                                if ( !foundIcon ) {
+                                    if ( spotlightIconMask ) {
+                                        [spotlightIconMask release];
+                                        spotlightIconMask = nil;
+                                    }
+                                    
+                                    if ( goodCandidate ) {
+                                        spotlightIconMask = [[[NSString alloc] initWithFormat:@"/Library/Themes/%@.theme/Bundles/com.apple.mobileicons.framework/%@", key, goodCandidate] retain];
+                                    } else {
+                                        spotlightIconMask = [[[NSString alloc] initWithFormat:@"/Library/Themes/%@.theme/Bundles/com.apple.mobileicons.framework/%@", key, [candidates objectAtIndex:0]] retain];
+                                    }
+                                }
+                            // thankfully, we just have one candidate, so use it
+                            } else {
+                                if ( spotlightIconMask ) {
+                                    [spotlightIconMask release];
+                                    spotlightIconMask = nil;
+                                }
+                                spotlightIconMask = [[[NSString alloc] initWithFormat:@"/Library/Themes/%@.theme/Bundles/com.apple.mobileicons.framework/%@", key, [candidates objectAtIndex:0]] retain];
+                            }
+                        }
+                        
+                        // release candidates
+                        [candidates release];
+                        candidates = nil;
                     }
                 }
             }
@@ -209,446 +349,480 @@ static void loadBundles() {
     language = [language stringByReplacingOccurrencesOfString:@"-" withString:@"_"];
     //NSLog(@"Adiuncta: language = '%@'", language);
     
-    if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings~iphone.strings", language]] ) {
-        plistContent = [[NSMutableDictionary alloc] initWithContentsOfFile:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings~iphone.strings", language]];
-    } else if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings~iphone.strings", [language substringToIndex:2]]] ) {
-        plistContent = [[NSMutableDictionary alloc] initWithContentsOfFile:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings~iphone.strings", [language substringToIndex:2]]];
-    } else if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings~iphone.strings", name]] ) {
-        plistContent = [[NSMutableDictionary alloc] initWithContentsOfFile:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings~iphone.strings", name]];
-    } else {
-        plistContent = [[NSMutableDictionary alloc] initWithContentsOfFile:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/English.lproj/Settings~iphone.strings"];
+    // release the locale
+    [locale release];
+    locale = nil;
+    
+    // don't know whether ipad has its own strings table, but try to use it
+    if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings%@.strings", language, device]] ) {
+        plistContent = [[NSMutableDictionary alloc] initWithContentsOfFile:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings%@.strings", language, device]];
+    } else if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings%@.strings", [language substringToIndex:2], device]] ) {
+        plistContent = [[NSMutableDictionary alloc] initWithContentsOfFile:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings%@.strings", [language substringToIndex:2], device]];
+    } else if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings%@.strings", name, device]] ) {
+        plistContent = [[NSMutableDictionary alloc] initWithContentsOfFile:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings%@.strings", name, device]];
+    } else if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/English.lproj/Settings%@.strings", device]] ) {
+        plistContent = [[NSMutableDictionary alloc] initWithContentsOfFile:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/English.lproj/Settings%@.strings", device]];
     }
     
-    // Airplane Mode
+    // should only conceivably get to this on an iPad... look for iphone strings
+    if ( !plistContent ) {
+        if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings~iphone.strings", language]] ) {
+            plistContent = [[NSMutableDictionary alloc] initWithContentsOfFile:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings~iphone.strings", language]];
+        } else if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings~iphone.strings", [language substringToIndex:2]]] ) {
+            plistContent = [[NSMutableDictionary alloc] initWithContentsOfFile:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings~iphone.strings", [language substringToIndex:2]]];
+        } else if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings~iphone.strings", name]] ) {
+            plistContent = [[NSMutableDictionary alloc] initWithContentsOfFile:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings~iphone.strings", name]];
+        } else if ( [[NSFileManager defaultManager] fileExistsAtPath:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/English.lproj/Settings~iphone.strings"] ) {
+            plistContent = [[NSMutableDictionary alloc] initWithContentsOfFile:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/English.lproj/Settings~iphone.strings"];
+        }
+    }
     
-    label = [plistContent objectForKey:@"Airplane Mode"];
-    icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"AirplaneMode%@.png", scaleFactor]];
+    // iOS, you make me cry, try looking for generics.
+    if ( !plistContent ) {
+        if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings.strings", language]] ) {
+            plistContent = [[NSMutableDictionary alloc] initWithContentsOfFile:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings.strings", language]];
+        } else if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings.strings", [language substringToIndex:2]]] ) {
+            plistContent = [[NSMutableDictionary alloc] initWithContentsOfFile:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings.strings", [language substringToIndex:2]]];
+        } else if ( [[NSFileManager defaultManager] fileExistsAtPath:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings.strings", name]] ) {
+            plistContent = [[NSMutableDictionary alloc] initWithContentsOfFile:[NSString stringWithFormat:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/%@.lproj/Settings.strings", name]];
+        } else if ( [[NSFileManager defaultManager] fileExistsAtPath:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/English.lproj/Settings.strings"] ) {
+            plistContent = [[NSMutableDictionary alloc] initWithContentsOfFile:@"/System/Library/PrivateFrameworks/PreferencesUI.framework/English.lproj/Settings.strings"];
+        }
+    }
     
-    searchResult = [[objc_getClass("SPSearchResult") alloc] init];
-    // bundle identifier (for cache icon lookup)
-    [searchResult setBundleID:label];  
-    // title
-    [searchResult setTitle:label];          
-    // important – sync with section domain
-    [searchResult setSearchResultDomain:19];
-    // important - set URL of preference panel
-    [searchResult setUrl:@"prefs:root"];
-    // not important - use later to check result type
-    searchResult.type = @"Settings";
-    // recommended – user activity / indexing
-    [searchResult setHasAssociatedUserActivity:NO];
-    [searchResult setUserActivityEligibleForPublicIndexing:NO];
-    
-    resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
-    [labelsMutable setObject:resultWithIcon forKey:label];
-    
-    // release searchResult
-    [searchResult release];
-    searchResult = nil;
-    
-    // Wi-Fi
-    
-    label = [plistContent objectForKey:@"WIFI"];
-    icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"WiFi%@.png", scaleFactor]];
-    
-    searchResult = [[objc_getClass("SPSearchResult") alloc] init];
-    // bundle identifier (for cache icon lookup)
-    [searchResult setBundleID:label];  
-    // title
-    [searchResult setTitle:label];          
-    // important – sync with section domain
-    [searchResult setSearchResultDomain:19];
-    // important - set URL of preference panel
-    [searchResult setUrl:@"prefs:root=WIFI"];
-    // not important - use later to check result type
-    searchResult.type = @"Settings";
-    // recommended – user activity / indexing
-    [searchResult setHasAssociatedUserActivity:NO];
-    [searchResult setUserActivityEligibleForPublicIndexing:NO];
-    
-    resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
-    [labelsMutable setObject:resultWithIcon forKey:label];
-    
-    // release searchResult
-    [searchResult release];
-    searchResult = nil;
-    
-    // Bluetooth
-    
-    label = [plistContent objectForKey:@"BLUETOOTH"];
-    icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"Bluetooth%@.png", scaleFactor]];
+    // if we were able to pull the plist info, add the stock bundles...
+    if ( plistContent ) {   
+        // Airplane Mode
+        
+        label = [plistContent objectForKey:@"Airplane Mode"];
+        icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"AirplaneMode%@.png", scaleFactor]];
+        
+        searchResult = [[objc_getClass("SPSearchResult") alloc] init];
+        // bundle identifier (for cache icon lookup)
+        [searchResult setBundleID:label];  
+        // title
+        [searchResult setTitle:label];          
+        // important – sync with section domain
+        [searchResult setSearchResultDomain:19];
+        // important - set URL of preference panel
+        [searchResult setUrl:@"prefs:root"];
+        // not important - use later to check result type
+        searchResult.type = @"Settings";
+        // recommended – user activity / indexing
+        [searchResult setHasAssociatedUserActivity:NO];
+        [searchResult setUserActivityEligibleForPublicIndexing:NO];
+        
+        resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
+        [labelsMutable setObject:resultWithIcon forKey:label];
+        
+        // release searchResult
+        [searchResult release];
+        searchResult = nil;
+        
+        // Wi-Fi
+        
+        label = [plistContent objectForKey:@"WIFI"];
+        icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"WiFi%@.png", scaleFactor]];
+        
+        searchResult = [[objc_getClass("SPSearchResult") alloc] init];
+        // bundle identifier (for cache icon lookup)
+        [searchResult setBundleID:label];  
+        // title
+        [searchResult setTitle:label];          
+        // important – sync with section domain
+        [searchResult setSearchResultDomain:19];
+        // important - set URL of preference panel
+        [searchResult setUrl:@"prefs:root=WIFI"];
+        // not important - use later to check result type
+        searchResult.type = @"Settings";
+        // recommended – user activity / indexing
+        [searchResult setHasAssociatedUserActivity:NO];
+        [searchResult setUserActivityEligibleForPublicIndexing:NO];
+        
+        resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
+        [labelsMutable setObject:resultWithIcon forKey:label];
+        
+        // release searchResult
+        [searchResult release];
+        searchResult = nil;
+        
+        // Bluetooth
+        
+        label = [plistContent objectForKey:@"BLUETOOTH"];
+        icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"Bluetooth%@.png", scaleFactor]];
 
-    searchResult = [[objc_getClass("SPSearchResult") alloc] init];
-    // bundle identifier (for cache icon lookup)
-    [searchResult setBundleID:label];  
-    // title
-    [searchResult setTitle:label];          
-    // important – sync with section domain
-    [searchResult setSearchResultDomain:19];
-    // important - set URL of preference panel
-    [searchResult setUrl:@"prefs:root=Bluetooth"];
-    // not important - use later to check result type
-    searchResult.type = @"Settings";
-    // recommended – user activity / indexing
-    [searchResult setHasAssociatedUserActivity:NO];
-    [searchResult setUserActivityEligibleForPublicIndexing:NO];
-    
-    resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
-    [labelsMutable setObject:resultWithIcon forKey:label];
-    
-    // release searchResult
-    [searchResult release];
-    searchResult = nil;
-    
-    // Cellular
-    
-    label = [plistContent objectForKey:@"CELLULAR"];
-    icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"CellularData%@.png", scaleFactor]];
-    
-    searchResult = [[objc_getClass("SPSearchResult") alloc] init];
-    // bundle identifier (for cache icon lookup)
-    [searchResult setBundleID:label];  
-    // title
-    [searchResult setTitle:label];          
-    // important – sync with section domain
-    [searchResult setSearchResultDomain:19];
-    // important - set URL of preference panel
-    [searchResult setUrl:@"prefs:root=MOBILE_DATA_SETTINGS_ID"];
-    // not important - use later to check result type
-    searchResult.type = @"Settings";
-    // recommended – user activity / indexing
-    [searchResult setHasAssociatedUserActivity:NO];
-    [searchResult setUserActivityEligibleForPublicIndexing:NO];
-    
-    resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
-    [labelsMutable setObject:resultWithIcon forKey:label];
-    
-    // release searchResult
-    [searchResult release];
-    searchResult = nil;
-    
-    // Personal Hotspot
-    
-    label = [plistContent objectForKey:@"PERSONAL_HOTSPOT"];
-    icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"PersonalHotspot%@.png", scaleFactor]];
-    
-    searchResult = [[objc_getClass("SPSearchResult") alloc] init];
-    // bundle identifier (for cache icon lookup)
-    [searchResult setBundleID:label];  
-    // title
-    [searchResult setTitle:label];          
-    // important – sync with section domain
-    [searchResult setSearchResultDomain:19];
-    // important - set URL of preference panel
-    [searchResult setUrl:@"prefs:root=INTERNET_TETHERING"];
-    // not important - use later to check result type
-    searchResult.type = @"Settings";
-    // recommended – user activity / indexing
-    [searchResult setHasAssociatedUserActivity:NO];
-    [searchResult setUserActivityEligibleForPublicIndexing:NO];
-    
-    resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
-    [labelsMutable setObject:resultWithIcon forKey:label];
-    
-    // release searchResult
-    [searchResult release];
-    searchResult = nil;
-    
-    // Carrier
-    
-    label = [plistContent objectForKey:@"CARRIER"];
-    icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"Carrier%@.png", scaleFactor]];
-    
-    searchResult = [[objc_getClass("SPSearchResult") alloc] init];
-    // bundle identifier (for cache icon lookup)
-    [searchResult setBundleID:label];  
-    // title
-    [searchResult setTitle:label];          
-    // important – sync with section domain
-    [searchResult setSearchResultDomain:19];
-    // important - set URL of preference panel
-    [searchResult setUrl:@"prefs:root=Carrier"];
-    // not important - use later to check result type
-    searchResult.type = @"Settings";
-    // recommended – user activity / indexing
-    [searchResult setHasAssociatedUserActivity:NO];
-    [searchResult setUserActivityEligibleForPublicIndexing:NO];
-    
-    resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
-    [labelsMutable setObject:resultWithIcon forKey:label];
-    
-    // release searchResult
-    [searchResult release];
-    searchResult = nil;
-    
-    // Notifications
-    
-    label = [plistContent objectForKey:@"NOTIFICATIONS"];
-    icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"NotificationCenter%@.png", scaleFactor]];
-    
-    searchResult = [[objc_getClass("SPSearchResult") alloc] init];
-    // bundle identifier (for cache icon lookup)
-    [searchResult setBundleID:label];  
-    // title
-    [searchResult setTitle:label];          
-    // important – sync with section domain
-    [searchResult setSearchResultDomain:19];
-    // important - set URL of preference panel
-    [searchResult setUrl:@"prefs:root=NOTIFICATIONS_ID"];
-    // not important - use later to check result type
-    searchResult.type = @"Settings";
-    // recommended – user activity / indexing
-    [searchResult setHasAssociatedUserActivity:NO];
-    [searchResult setUserActivityEligibleForPublicIndexing:NO];
-    
-    resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
-    [labelsMutable setObject:resultWithIcon forKey:label];
-    
-    // release searchResult
-    [searchResult release];
-    searchResult = nil;
-    
-    // Control Center
-    
-    label = [plistContent objectForKey:@"CONTROLCENTER"];
-    icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"ControlCenter%@.png", scaleFactor]];
-    
-    searchResult = [[objc_getClass("SPSearchResult") alloc] init];
-    // bundle identifier (for cache icon lookup)
-    [searchResult setBundleID:label];  
-    // title
-    [searchResult setTitle:label];          
-    // important – sync with section domain
-    [searchResult setSearchResultDomain:19];
-    // important - set URL of preference panel
-    [searchResult setUrl:@"prefs:root=ControlCenter"];
-    // not important - use later to check result type
-    searchResult.type = @"Settings";
-    // recommended – user activity / indexing
-    [searchResult setHasAssociatedUserActivity:NO];
-    [searchResult setUserActivityEligibleForPublicIndexing:NO];
-    
-    resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
-    [labelsMutable setObject:resultWithIcon forKey:label];
-    
-    // release searchResult
-    [searchResult release];
-    searchResult = nil;
-    
-    // Do Not Disturb
-    
-    label = [plistContent objectForKey:@"DO_NOT_DISTURB"];
-    icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"DND%@.png", scaleFactor]];
-    
-    searchResult = [[objc_getClass("SPSearchResult") alloc] init];
-    // bundle identifier (for cache icon lookup)
-    [searchResult setBundleID:label];  
-    // title
-    [searchResult setTitle:label];          
-    // important – sync with section domain
-    [searchResult setSearchResultDomain:19];
-    // important - set URL of preference panel
-    [searchResult setUrl:@"prefs:root=DO_NOT_DISTURB"];
-    // not important - use later to check result type
-    searchResult.type = @"Settings";
-    // recommended – user activity / indexing
-    [searchResult setHasAssociatedUserActivity:NO];
-    [searchResult setUserActivityEligibleForPublicIndexing:NO];
-    
-    resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
-    [labelsMutable setObject:resultWithIcon forKey:label];
-    
-    // release searchResult
-    [searchResult release];
-    searchResult = nil;
-    
-    // General
-    
-    label = [plistContent objectForKey:@"General"];
-    icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"General%@.png", scaleFactor]];
-    
-    searchResult = [[objc_getClass("SPSearchResult") alloc] init];
-    // bundle identifier (for cache icon lookup)
-    [searchResult setBundleID:label];  
-    // title
-    [searchResult setTitle:label];          
-    // important – sync with section domain
-    [searchResult setSearchResultDomain:19];
-    // important - set URL of preference panel
-    [searchResult setUrl:@"prefs:root=General"];
-    // not important - use later to check result type
-    searchResult.type = @"Settings";
-    // recommended – user activity / indexing
-    [searchResult setHasAssociatedUserActivity:NO];
-    [searchResult setUserActivityEligibleForPublicIndexing:NO];
-    
-    resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
-    [labelsMutable setObject:resultWithIcon forKey:label];
-    
-    // release searchResult
-    [searchResult release];
-    searchResult = nil;
-    
-    // Display & Brightness
-    
-    label = [plistContent objectForKey:@"Display"];
-    icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"Display%@.png", scaleFactor]];
-    
-    searchResult = [[objc_getClass("SPSearchResult") alloc] init];
-    // bundle identifier (for cache icon lookup)
-    [searchResult setBundleID:label];  
-    // title
-    [searchResult setTitle:label];          
-    // important – sync with section domain
-    [searchResult setSearchResultDomain:19];
-    // important - set URL of preference panel
-    [searchResult setUrl:@"prefs:root=DISPLAY"];
-    // not important - use later to check result type
-    searchResult.type = @"Settings";
-    // recommended – user activity / indexing
-    [searchResult setHasAssociatedUserActivity:NO];
-    [searchResult setUserActivityEligibleForPublicIndexing:NO];
-    
-    resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
-    [labelsMutable setObject:resultWithIcon forKey:label];
-    
-    // release searchResult
-    [searchResult release];
-    searchResult = nil;
-    
-    // Wallpaper
-    
-    label = [plistContent objectForKey:@"Wallpaper"];
-    icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"Wallpaper%@.png", scaleFactor]];
-    
-    searchResult = [[objc_getClass("SPSearchResult") alloc] init];
-    // bundle identifier (for cache icon lookup)
-    [searchResult setBundleID:label];  
-    // title
-    [searchResult setTitle:label];          
-    // important – sync with section domain
-    [searchResult setSearchResultDomain:19];
-    // important - set URL of preference panel
-    [searchResult setUrl:@"prefs:root=Wallpaper"];
-    // not important - use later to check result type
-    searchResult.type = @"Settings";
-    // recommended – user activity / indexing
-    [searchResult setHasAssociatedUserActivity:NO];
-    [searchResult setUserActivityEligibleForPublicIndexing:NO];
-    
-    resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
-    [labelsMutable setObject:resultWithIcon forKey:label];
-    
-    // release searchResult
-    [searchResult release];
-    searchResult = nil;
-    
-    // Sounds
-    label = [plistContent objectForKey:@"Sounds"];
-    icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"Sounds%@.png", scaleFactor]];
-    
-    searchResult = [[objc_getClass("SPSearchResult") alloc] init];
-    // bundle identifier (for cache icon lookup)
-    [searchResult setBundleID:label];  
-    // title
-    [searchResult setTitle:label];          
-    // important – sync with section domain
-    [searchResult setSearchResultDomain:19];
-    // important - set URL of preference panel
-    [searchResult setUrl:@"prefs:root=Sounds"];
-    // not important - use later to check result type
-    searchResult.type = @"Settings";
-    // recommended – user activity / indexing
-    [searchResult setHasAssociatedUserActivity:NO];
-    [searchResult setUserActivityEligibleForPublicIndexing:NO];
-    
-    resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
-    [labelsMutable setObject:resultWithIcon forKey:label];
-    
-    // release searchResult
-    [searchResult release];
-    searchResult = nil;
-    
-    // Touch ID & Passcode
-    
-    label = [plistContent objectForKey:@"TOUCHID_PASSCODE"];
-    icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"TouchID%@.png", scaleFactor]];
-    
-    searchResult = [[objc_getClass("SPSearchResult") alloc] init];
-    // bundle identifier (for cache icon lookup)
-    [searchResult setBundleID:label];  
-    // title
-    [searchResult setTitle:label];          
-    // important – sync with section domain
-    [searchResult setSearchResultDomain:19];
-    // important - set URL of preference panel
-    [searchResult setUrl:@"prefs:root=TOUCHID_PASSCODE"];
-    // not important - use later to check result type
-    searchResult.type = @"Settings";
-    // recommended – user activity / indexing
-    [searchResult setHasAssociatedUserActivity:NO];
-    [searchResult setUserActivityEligibleForPublicIndexing:NO];
-    
-    resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
-    [labelsMutable setObject:resultWithIcon forKey:label];
-    
-    // release searchResult
-    [searchResult release];
-    searchResult = nil;
-    
-    // Battery
-    
-    label = [plistContent objectForKey:@"BATTERY_USAGE"];
-    icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"BatteryUsage%@.png", scaleFactor]];
-    
-    searchResult = [[objc_getClass("SPSearchResult") alloc] init];
-    // bundle identifier (for cache icon lookup)
-    [searchResult setBundleID:@"BatteryID"];  
-    // title
-    [searchResult setTitle:label];          
-    // important – sync with section domain
-    [searchResult setSearchResultDomain:19];
-    // important - set URL of preference panel
-    [searchResult setUrl:@"prefs:root=BATTERY_USAGE"];
-    // not important - use later to check result type
-    searchResult.type = @"Settings";
-    // recommended – user activity / indexing
-    [searchResult setHasAssociatedUserActivity:NO];
-    [searchResult setUserActivityEligibleForPublicIndexing:NO];
-    
-    resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
-    [labelsMutable setObject:resultWithIcon forKey:label];
-    
-    // release searchResult
-    [searchResult release];
-    searchResult = nil;
-    
-    // Privacy
-    
-    label = [plistContent objectForKey:@"Privacy"];
-    icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"Privacy%@.png", scaleFactor]];
-    
-    searchResult = [[objc_getClass("SPSearchResult") alloc] init];
-    // bundle identifier (for cache icon lookup)
-    [searchResult setBundleID:label];  
-    // title
-    [searchResult setTitle:label];          
-    // important – sync with section domain
-    [searchResult setSearchResultDomain:19];
-    // important - set URL of preference panel
-    [searchResult setUrl:@"prefs:root=Privacy"];
-    // not important - use later to check result type
-    searchResult.type = @"Settings";
-    // recommended – user activity / indexing
-    [searchResult setHasAssociatedUserActivity:NO];
-    [searchResult setUserActivityEligibleForPublicIndexing:NO];
-    
-    resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
-    [labelsMutable setObject:resultWithIcon forKey:label];
-    
-    // release searchResult
-    [searchResult release];
-    searchResult = nil;
+        searchResult = [[objc_getClass("SPSearchResult") alloc] init];
+        // bundle identifier (for cache icon lookup)
+        [searchResult setBundleID:label];  
+        // title
+        [searchResult setTitle:label];          
+        // important – sync with section domain
+        [searchResult setSearchResultDomain:19];
+        // important - set URL of preference panel
+        [searchResult setUrl:@"prefs:root=Bluetooth"];
+        // not important - use later to check result type
+        searchResult.type = @"Settings";
+        // recommended – user activity / indexing
+        [searchResult setHasAssociatedUserActivity:NO];
+        [searchResult setUserActivityEligibleForPublicIndexing:NO];
+        
+        resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
+        [labelsMutable setObject:resultWithIcon forKey:label];
+        
+        // release searchResult
+        [searchResult release];
+        searchResult = nil;
+        
+        // Cellular
+        
+        label = [plistContent objectForKey:@"CELLULAR"];
+        icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"CellularData%@.png", scaleFactor]];
+        
+        searchResult = [[objc_getClass("SPSearchResult") alloc] init];
+        // bundle identifier (for cache icon lookup)
+        [searchResult setBundleID:label];  
+        // title
+        [searchResult setTitle:label];          
+        // important – sync with section domain
+        [searchResult setSearchResultDomain:19];
+        // important - set URL of preference panel
+        [searchResult setUrl:@"prefs:root=MOBILE_DATA_SETTINGS_ID"];
+        // not important - use later to check result type
+        searchResult.type = @"Settings";
+        // recommended – user activity / indexing
+        [searchResult setHasAssociatedUserActivity:NO];
+        [searchResult setUserActivityEligibleForPublicIndexing:NO];
+        
+        resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
+        [labelsMutable setObject:resultWithIcon forKey:label];
+        
+        // release searchResult
+        [searchResult release];
+        searchResult = nil;
+        
+        // Personal Hotspot
+        
+        label = [plistContent objectForKey:@"PERSONAL_HOTSPOT"];
+        icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"PersonalHotspot%@.png", scaleFactor]];
+        
+        searchResult = [[objc_getClass("SPSearchResult") alloc] init];
+        // bundle identifier (for cache icon lookup)
+        [searchResult setBundleID:label];  
+        // title
+        [searchResult setTitle:label];          
+        // important – sync with section domain
+        [searchResult setSearchResultDomain:19];
+        // important - set URL of preference panel
+        [searchResult setUrl:@"prefs:root=INTERNET_TETHERING"];
+        // not important - use later to check result type
+        searchResult.type = @"Settings";
+        // recommended – user activity / indexing
+        [searchResult setHasAssociatedUserActivity:NO];
+        [searchResult setUserActivityEligibleForPublicIndexing:NO];
+        
+        resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
+        [labelsMutable setObject:resultWithIcon forKey:label];
+        
+        // release searchResult
+        [searchResult release];
+        searchResult = nil;
+        
+        // Carrier
+        
+        label = [plistContent objectForKey:@"CARRIER"];
+        icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"Carrier%@.png", scaleFactor]];
+        
+        searchResult = [[objc_getClass("SPSearchResult") alloc] init];
+        // bundle identifier (for cache icon lookup)
+        [searchResult setBundleID:label];  
+        // title
+        [searchResult setTitle:label];          
+        // important – sync with section domain
+        [searchResult setSearchResultDomain:19];
+        // important - set URL of preference panel
+        [searchResult setUrl:@"prefs:root=Carrier"];
+        // not important - use later to check result type
+        searchResult.type = @"Settings";
+        // recommended – user activity / indexing
+        [searchResult setHasAssociatedUserActivity:NO];
+        [searchResult setUserActivityEligibleForPublicIndexing:NO];
+        
+        resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
+        [labelsMutable setObject:resultWithIcon forKey:label];
+        
+        // release searchResult
+        [searchResult release];
+        searchResult = nil;
+        
+        // Notifications
+        
+        label = [plistContent objectForKey:@"NOTIFICATIONS"];
+        icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"NotificationCenter%@.png", scaleFactor]];
+        
+        searchResult = [[objc_getClass("SPSearchResult") alloc] init];
+        // bundle identifier (for cache icon lookup)
+        [searchResult setBundleID:label];  
+        // title
+        [searchResult setTitle:label];          
+        // important – sync with section domain
+        [searchResult setSearchResultDomain:19];
+        // important - set URL of preference panel
+        [searchResult setUrl:@"prefs:root=NOTIFICATIONS_ID"];
+        // not important - use later to check result type
+        searchResult.type = @"Settings";
+        // recommended – user activity / indexing
+        [searchResult setHasAssociatedUserActivity:NO];
+        [searchResult setUserActivityEligibleForPublicIndexing:NO];
+        
+        resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
+        [labelsMutable setObject:resultWithIcon forKey:label];
+        
+        // release searchResult
+        [searchResult release];
+        searchResult = nil;
+        
+        // Control Center
+        
+        label = [plistContent objectForKey:@"CONTROLCENTER"];
+        icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"ControlCenter%@.png", scaleFactor]];
+        
+        searchResult = [[objc_getClass("SPSearchResult") alloc] init];
+        // bundle identifier (for cache icon lookup)
+        [searchResult setBundleID:label];  
+        // title
+        [searchResult setTitle:label];          
+        // important – sync with section domain
+        [searchResult setSearchResultDomain:19];
+        // important - set URL of preference panel
+        [searchResult setUrl:@"prefs:root=ControlCenter"];
+        // not important - use later to check result type
+        searchResult.type = @"Settings";
+        // recommended – user activity / indexing
+        [searchResult setHasAssociatedUserActivity:NO];
+        [searchResult setUserActivityEligibleForPublicIndexing:NO];
+        
+        resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
+        [labelsMutable setObject:resultWithIcon forKey:label];
+        
+        // release searchResult
+        [searchResult release];
+        searchResult = nil;
+        
+        // Do Not Disturb
+        
+        label = [plistContent objectForKey:@"DO_NOT_DISTURB"];
+        icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"DND%@.png", scaleFactor]];
+        
+        searchResult = [[objc_getClass("SPSearchResult") alloc] init];
+        // bundle identifier (for cache icon lookup)
+        [searchResult setBundleID:label];  
+        // title
+        [searchResult setTitle:label];          
+        // important – sync with section domain
+        [searchResult setSearchResultDomain:19];
+        // important - set URL of preference panel
+        [searchResult setUrl:@"prefs:root=DO_NOT_DISTURB"];
+        // not important - use later to check result type
+        searchResult.type = @"Settings";
+        // recommended – user activity / indexing
+        [searchResult setHasAssociatedUserActivity:NO];
+        [searchResult setUserActivityEligibleForPublicIndexing:NO];
+        
+        resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
+        [labelsMutable setObject:resultWithIcon forKey:label];
+        
+        // release searchResult
+        [searchResult release];
+        searchResult = nil;
+        
+        // General
+        
+        label = [plistContent objectForKey:@"General"];
+        icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"General%@.png", scaleFactor]];
+        
+        searchResult = [[objc_getClass("SPSearchResult") alloc] init];
+        // bundle identifier (for cache icon lookup)
+        [searchResult setBundleID:label];  
+        // title
+        [searchResult setTitle:label];          
+        // important – sync with section domain
+        [searchResult setSearchResultDomain:19];
+        // important - set URL of preference panel
+        [searchResult setUrl:@"prefs:root=General"];
+        // not important - use later to check result type
+        searchResult.type = @"Settings";
+        // recommended – user activity / indexing
+        [searchResult setHasAssociatedUserActivity:NO];
+        [searchResult setUserActivityEligibleForPublicIndexing:NO];
+        
+        resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
+        [labelsMutable setObject:resultWithIcon forKey:label];
+        
+        // release searchResult
+        [searchResult release];
+        searchResult = nil;
+        
+        // Display & Brightness
+        
+        label = [plistContent objectForKey:@"Display"];
+        icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"Display%@.png", scaleFactor]];
+        
+        searchResult = [[objc_getClass("SPSearchResult") alloc] init];
+        // bundle identifier (for cache icon lookup)
+        [searchResult setBundleID:label];  
+        // title
+        [searchResult setTitle:label];          
+        // important – sync with section domain
+        [searchResult setSearchResultDomain:19];
+        // important - set URL of preference panel
+        [searchResult setUrl:@"prefs:root=DISPLAY"];
+        // not important - use later to check result type
+        searchResult.type = @"Settings";
+        // recommended – user activity / indexing
+        [searchResult setHasAssociatedUserActivity:NO];
+        [searchResult setUserActivityEligibleForPublicIndexing:NO];
+        
+        resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
+        [labelsMutable setObject:resultWithIcon forKey:label];
+        
+        // release searchResult
+        [searchResult release];
+        searchResult = nil;
+        
+        // Wallpaper
+        
+        label = [plistContent objectForKey:@"Wallpaper"];
+        icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"Wallpaper%@.png", scaleFactor]];
+        
+        searchResult = [[objc_getClass("SPSearchResult") alloc] init];
+        // bundle identifier (for cache icon lookup)
+        [searchResult setBundleID:label];  
+        // title
+        [searchResult setTitle:label];          
+        // important – sync with section domain
+        [searchResult setSearchResultDomain:19];
+        // important - set URL of preference panel
+        [searchResult setUrl:@"prefs:root=Wallpaper"];
+        // not important - use later to check result type
+        searchResult.type = @"Settings";
+        // recommended – user activity / indexing
+        [searchResult setHasAssociatedUserActivity:NO];
+        [searchResult setUserActivityEligibleForPublicIndexing:NO];
+        
+        resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
+        [labelsMutable setObject:resultWithIcon forKey:label];
+        
+        // release searchResult
+        [searchResult release];
+        searchResult = nil;
+        
+        // Sounds
+        label = [plistContent objectForKey:@"Sounds"];
+        icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"Sounds%@.png", scaleFactor]];
+        
+        searchResult = [[objc_getClass("SPSearchResult") alloc] init];
+        // bundle identifier (for cache icon lookup)
+        [searchResult setBundleID:label];  
+        // title
+        [searchResult setTitle:label];          
+        // important – sync with section domain
+        [searchResult setSearchResultDomain:19];
+        // important - set URL of preference panel
+        [searchResult setUrl:@"prefs:root=Sounds"];
+        // not important - use later to check result type
+        searchResult.type = @"Settings";
+        // recommended – user activity / indexing
+        [searchResult setHasAssociatedUserActivity:NO];
+        [searchResult setUserActivityEligibleForPublicIndexing:NO];
+        
+        resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
+        [labelsMutable setObject:resultWithIcon forKey:label];
+        
+        // release searchResult
+        [searchResult release];
+        searchResult = nil;
+        
+        // Touch ID & Passcode
+        
+        label = [plistContent objectForKey:@"TOUCHID_PASSCODE"];
+        icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"TouchID%@.png", scaleFactor]];
+        
+        searchResult = [[objc_getClass("SPSearchResult") alloc] init];
+        // bundle identifier (for cache icon lookup)
+        [searchResult setBundleID:label];  
+        // title
+        [searchResult setTitle:label];          
+        // important – sync with section domain
+        [searchResult setSearchResultDomain:19];
+        // important - set URL of preference panel
+        [searchResult setUrl:@"prefs:root=TOUCHID_PASSCODE"];
+        // not important - use later to check result type
+        searchResult.type = @"Settings";
+        // recommended – user activity / indexing
+        [searchResult setHasAssociatedUserActivity:NO];
+        [searchResult setUserActivityEligibleForPublicIndexing:NO];
+        
+        resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
+        [labelsMutable setObject:resultWithIcon forKey:label];
+        
+        // release searchResult
+        [searchResult release];
+        searchResult = nil;
+        
+        // Battery
+        
+        label = [plistContent objectForKey:@"BATTERY_USAGE"];
+        icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"BatteryUsage%@.png", scaleFactor]];
+        
+        searchResult = [[objc_getClass("SPSearchResult") alloc] init];
+        // bundle identifier (for cache icon lookup)
+        [searchResult setBundleID:@"BatteryID"];  
+        // title
+        [searchResult setTitle:label];          
+        // important – sync with section domain
+        [searchResult setSearchResultDomain:19];
+        // important - set URL of preference panel
+        [searchResult setUrl:@"prefs:root=BATTERY_USAGE"];
+        // not important - use later to check result type
+        searchResult.type = @"Settings";
+        // recommended – user activity / indexing
+        [searchResult setHasAssociatedUserActivity:NO];
+        [searchResult setUserActivityEligibleForPublicIndexing:NO];
+        
+        resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
+        [labelsMutable setObject:resultWithIcon forKey:label];
+        
+        // release searchResult
+        [searchResult release];
+        searchResult = nil;
+        
+        // Privacy
+        
+        label = [plistContent objectForKey:@"Privacy"];
+        icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"Privacy%@.png", scaleFactor]];
+        
+        searchResult = [[objc_getClass("SPSearchResult") alloc] init];
+        // bundle identifier (for cache icon lookup)
+        [searchResult setBundleID:label];  
+        // title
+        [searchResult setTitle:label];          
+        // important – sync with section domain
+        [searchResult setSearchResultDomain:19];
+        // important - set URL of preference panel
+        [searchResult setUrl:@"prefs:root=Privacy"];
+        // not important - use later to check result type
+        searchResult.type = @"Settings";
+        // recommended – user activity / indexing
+        [searchResult setHasAssociatedUserActivity:NO];
+        [searchResult setUserActivityEligibleForPublicIndexing:NO];
+        
+        resultWithIcon = [NSDictionary dictionaryWithObjectsAndKeys:searchResult, @"result", icon, @"icon", nil];
+        [labelsMutable setObject:resultWithIcon forKey:label];
+        
+        // release searchResult
+        [searchResult release];
+        searchResult = nil;
+    }
     
     // retain a non-mutable copy
     labels = [[[NSDictionary alloc] initWithDictionary:labelsMutable] retain];
@@ -722,6 +896,9 @@ static UIImage *createIcon(UIImage *icon, CGSize size) {
         
         // clip the context using the mask
         CGContextClipToMask(context, CGRectMake(0, 0, size.width, size.height), mask);
+        
+        // release the mask
+        CGImageRelease(mask);
     } else {       
         // re-round the corners with a UIBezierPath rounded rect to try to smooth out the edges
         CGContextAddPath(context, CGPathCreateCopy([UIBezierPath bezierPathWithRoundedRect:CGRectMake(0, 0, size.width, size.height) byRoundingCorners:UIRectCornerAllCorners cornerRadii:CGSizeMake(10.0f/57.0f * size.width, size.height)].CGPath));
@@ -856,6 +1033,9 @@ static UIImage *createIcon(UIImage *icon, CGSize size) {
 %end
 
 %ctor {
+    // get the device
+    device = ( UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad ) ? @"~ipad" : @"~iphone";
+    
     // get the device scale
     if ( [UIScreen mainScreen].scale == 3.0f ) {
         //scaleFactor = @"@3x";
