@@ -57,13 +57,10 @@ static void loadBundles() {
         labels = nil;
     }
     
-    // get the scale factor for pulling icons
     NSString *scaleFactor = scale > 1 ? [NSString stringWithFormat:@"@%dx", scale] : @"";
     
-    // set the initial icon path for the preferences app
     settingsIconPath = [[[NSString alloc] initWithFormat:@"/Applications/Preferences.app/AppIcon60x60%@.png", scaleFactor] retain];
 
-    // set the initial tweakroot
     NSString *tweakRoot = @"prefs:root=%@";
     
     // check for PreferenceOrganizer2
@@ -78,7 +75,7 @@ static void loadBundles() {
         //NSLog(@"Adiuncta: Anemone is installed");
         if ( [[NSFileManager defaultManager] fileExistsAtPath:@"/User/Library/Preferences/com.anemoneteam.anemone.plist"] ) {
             NSDictionary *themes = [[NSMutableDictionary alloc] initWithContentsOfFile:@"/User/Library/Preferences/com.anemoneteam.anemone.plist"];
-            // loop the keys and find the enabled theme components
+            
             for (NSString *key in themes) {
                 //NSLog(@"Adiuncta: %@", key);
                 if ( [[[themes objectForKey:key] objectForKey:@"Enabled"] boolValue] ) {
@@ -835,6 +832,40 @@ static void loadBundles() {
     labelsMutable = nil;
 }
 
+/*
+static CGImageRef createMaskWithImage(CGImageRef image) {
+    int maskWidth               = CGImageGetWidth(image);
+    int maskHeight              = CGImageGetHeight(image);
+    //  round bytesPerRow to the nearest 16 bytes, for performance's sake
+    int bytesPerRow             = (maskWidth + 15) & 0xfffffff0;
+    int bufferSize              = bytesPerRow * maskHeight;
+
+    //  allocate memory for the bits 
+    CFMutableDataRef dataBuffer = CFDataCreateMutable(kCFAllocatorDefault, 0);
+    CFDataSetLength(dataBuffer, bufferSize);
+
+    //  the data will be 8 bits per pixel, no alpha
+    CGColorSpaceRef colourSpace = CGColorSpaceCreateDeviceGray();
+    CGContextRef ctx            = CGBitmapContextCreate(CFDataGetMutableBytePtr(dataBuffer),
+                                                        maskWidth, maskHeight,
+                                                        8, bytesPerRow, colourSpace, kCGImageAlphaNone);
+    //  drawing into this context will draw into the dataBuffer.
+    CGContextDrawImage(ctx, CGRectMake(0, 0, maskWidth, maskHeight), image);
+    CGContextRelease(ctx);
+
+    //  now make a mask from the data.
+    CGDataProviderRef dataProvider  = CGDataProviderCreateWithCFData(dataBuffer);
+    CGImageRef mask                 = CGImageMaskCreate(maskWidth, maskHeight, 8, 8, bytesPerRow,
+                                                        dataProvider, NULL, FALSE);
+
+    CGDataProviderRelease(dataProvider);
+    CGColorSpaceRelease(colourSpace);
+    CFRelease(dataBuffer);
+
+    return mask;
+}
+*/
+
 static UIImage *createIcon(UIImage *icon, CGSize size) {
     // obtain the settings icon from the path obtained earlier
     UIImage *background = [UIImage imageWithContentsOfFile:settingsIconPath];
@@ -853,7 +884,7 @@ static UIImage *createIcon(UIImage *icon, CGSize size) {
         // we need to create the mask from the spotlightIconMask's CGImage
         CGImageRef maskRef = [[UIImage imageWithContentsOfFile:spotlightIconMask] CGImage];
         
-        // coregraphics doesn't like anemone's icon masks, so we need to invert the alpha channel 
+        // coregraphics doesn't like anemone's icon masks, so we need to invert the alpha mask 
         CGFloat decode[] = { CGFloat(1), CGFloat(0),  // alpha (flipped)
                              CGFloat(0), CGFloat(1),  // red   (no change)
                              CGFloat(0), CGFloat(1),  // green (no change)
@@ -1007,8 +1038,10 @@ static UIImage *createIcon(UIImage *icon, CGSize size) {
     
     // get the device scale
     if ( [UIScreen mainScreen].scale == 3.0f ) {
+        //scaleFactor = @"@3x";
         scale = 3;
     } else if ( [UIScreen mainScreen].scale == 2.0f ) {
+        //scaleFactor = @"@2x";
         scale = 2;
     }
 }
