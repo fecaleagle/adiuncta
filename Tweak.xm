@@ -99,7 +99,7 @@ static void loadBundles() {
                         
                         // while we have another file to check...
                         while ( (iconFile = [enumerator nextObject]) ) {
-                            NSLog(@"Adiuncta: looping for icon in key %@", key);
+                            //NSLog(@"Adiuncta: looping for icon in key %@", key);
                             // if we've got a potential icon for settings, add it to the candidates array
                             if ( [iconFile hasPrefix:@"com.apple.Preferences"] ) {
                                 [candidates addObject:iconFile];
@@ -179,7 +179,7 @@ static void loadBundles() {
                         
                         // while we have another file to check...
                         while ( (maskFile = [enumerator nextObject]) ) {
-                            NSLog(@"Adiuncta: looping for mask in key %@", key);
+                            //NSLog(@"Adiuncta: looping for mask in key %@", key);
                             // if we've got a potential mask for use in Spotlight, add it to the candidates array
                             if ( [maskFile hasPrefix:@"AppIconMask"] ) {
                                 [candidates addObject:maskFile];
@@ -717,6 +717,7 @@ static void loadBundles() {
         searchResult = nil;
         
         // Sounds
+        
         label = [plistContent objectForKey:@"Sounds"];
         icon = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/Preferences.framework/%@", [NSString stringWithFormat:@"Sounds%@.png", scaleFactor]];
         
@@ -832,40 +833,6 @@ static void loadBundles() {
     labelsMutable = nil;
 }
 
-/*
-static CGImageRef createMaskWithImage(CGImageRef image) {
-    int maskWidth               = CGImageGetWidth(image);
-    int maskHeight              = CGImageGetHeight(image);
-    //  round bytesPerRow to the nearest 16 bytes, for performance's sake
-    int bytesPerRow             = (maskWidth + 15) & 0xfffffff0;
-    int bufferSize              = bytesPerRow * maskHeight;
-
-    //  allocate memory for the bits 
-    CFMutableDataRef dataBuffer = CFDataCreateMutable(kCFAllocatorDefault, 0);
-    CFDataSetLength(dataBuffer, bufferSize);
-
-    //  the data will be 8 bits per pixel, no alpha
-    CGColorSpaceRef colourSpace = CGColorSpaceCreateDeviceGray();
-    CGContextRef ctx            = CGBitmapContextCreate(CFDataGetMutableBytePtr(dataBuffer),
-                                                        maskWidth, maskHeight,
-                                                        8, bytesPerRow, colourSpace, kCGImageAlphaNone);
-    //  drawing into this context will draw into the dataBuffer.
-    CGContextDrawImage(ctx, CGRectMake(0, 0, maskWidth, maskHeight), image);
-    CGContextRelease(ctx);
-
-    //  now make a mask from the data.
-    CGDataProviderRef dataProvider  = CGDataProviderCreateWithCFData(dataBuffer);
-    CGImageRef mask                 = CGImageMaskCreate(maskWidth, maskHeight, 8, 8, bytesPerRow,
-                                                        dataProvider, NULL, FALSE);
-
-    CGDataProviderRelease(dataProvider);
-    CGColorSpaceRelease(colourSpace);
-    CFRelease(dataBuffer);
-
-    return mask;
-}
-*/
-
 static UIImage *createIcon(UIImage *icon, CGSize size) {
     // obtain the settings icon from the path obtained earlier
     UIImage *background = [UIImage imageWithContentsOfFile:settingsIconPath];
@@ -953,13 +920,7 @@ static UIImage *createIcon(UIImage *icon, CGSize size) {
             // the image will be resized to 60x60 on a non-retina device, 120x120 on a 2x retina device, and 180x180 on a 3x retina device
             // makes no sense - the stated spotlight icon size is 40x40, but for some reason, iOS 9 uses a 120x120 image on a 2x retina device, when it should be 80x80 according to the documentation
             // need feedback from testers to confirm that this (60x60) is consistent across all 64-bit devices
-            //if ( scale == 3 ) {
-                cachedImage = createIcon([UIImage imageWithContentsOfFile:iconPath], CGSizeMake(60, 60));
-            //} else if ( scale == 2 ) {
-                //cachedImage = createIcon([UIImage imageWithContentsOfFile:iconPath], [UIImage imageWithContentsOfFile:@"/Applications/Preferences.app/AppIcon60x60@2x.png"], CGSizeMake(60, 60));
-            //} else {
-                //cachedImage = createIcon([UIImage imageWithContentsOfFile:iconPath], [UIImage imageWithContentsOfFile:@"/Applications/Preferences.app/AppIcon60x60.png"], CGSizeMake(60, 60));
-            //}
+            cachedImage = createIcon([UIImage imageWithContentsOfFile:iconPath], CGSizeMake(60, 60));
             
             // cache the image - caching is based on the result bundleID
             [self cacheImage:cachedImage forResult:result inSection:section];
