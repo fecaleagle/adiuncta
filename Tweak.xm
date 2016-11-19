@@ -32,11 +32,13 @@
 @end
 
 @interface SPUISearchModel
++ (id) sharedInstance;
 // hooked methods
 - (void)addSections:(id)arg1 ;
 - (id)cachedImageForResult:(id)arg1 inSection:(id)arg2;
 // utilized methods
 - (void)cacheImage:(id)arg1 forResult:(id)arg2 inSection:(id)arg3;
+- (void)clearImageCache;
 - (NSString *)queryString;
 - (SPSearchResultSection*)sectionAtIndex:(unsigned int)arg1;
 // new methods
@@ -45,9 +47,16 @@
 @end
 
 static NSDictionary *labels;
-static int           scale = 1;
+static float         scale           = 1.0f;
+
 static NSString     *settingsIconPath;
 static NSString     *spotlightIconMask;
+
+static BOOL          useSettingsIcon = YES;
+static float         iconAlpha       = 1.0f;
+static float         insetAlpha      = 1.0f;
+static BOOL          insetMasked     = YES;
+static BOOL          insetMono       = NO;
 
 static void loadBundles() {
     // if labels is allocated, release it
@@ -58,7 +67,7 @@ static void loadBundles() {
     
     // get the device and scaleFactor strings
     NSString *device      = ( UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad ) ? @"~ipad" : @"~iphone";
-    NSString *scaleFactor = scale > 1 ? [NSString stringWithFormat:@"@%dx", scale] : @"";
+    NSString *scaleFactor = scale > 1.0f ? [NSString stringWithFormat:@"@%.0fx", scale] : @"";
     
     // initialize settingsIconPath with the default value
     settingsIconPath = [[[NSString alloc] initWithFormat:@"/Applications/Preferences.app/AppIcon60x60%@.png", scaleFactor] retain];
@@ -243,6 +252,9 @@ static void loadBundles() {
             }
         }
     }
+    
+    CFPreferencesSetAppValue(CFSTR("SpotlightIconMask"), (__bridge CFStringRef)spotlightIconMask, CFSTR("net.bearlike.adiuncta"));
+    CFPreferencesSetAppValue(CFSTR("SettingsIconPath"), (__bridge CFStringRef)settingsIconPath, CFSTR("net.bearlike.adiuncta"));
     
     // enumerate all files and folders under PreferenceLoader
     NSDirectoryEnumerator *enumerator = [[NSFileManager defaultManager] enumeratorAtPath:@"/Library/PreferenceLoader/Preferences/"];
@@ -835,7 +847,7 @@ static void loadBundles() {
 
 static UIImage *createIcon(UIImage *icon, CGSize size) {
     // obtain the settings icon from the path obtained earlier
-    UIImage *background = [UIImage imageWithContentsOfFile:settingsIconPath];
+    UIImage *settingsIcon = useSettingsIcon ? [UIImage imageWithContentsOfFile:settingsIconPath] : nil;
     
     // create an image context with the specified size, non-opaque, and device-scaled
     UIGraphicsBeginImageContextWithOptions(size, NO, 0.0);
@@ -846,10 +858,15 @@ static UIImage *createIcon(UIImage *icon, CGSize size) {
     CGContextSetShouldAntialias(context, true);
     CGContextSetAllowsAntialiasing(context, true);
     
+    CGImageRef bundleMask;
+    
     // if we've got an icon mask from anemone, use it (cry first)
     if ( spotlightIconMask ) {
+        // get the icon mask image
+        UIImage *iconMask = [UIImage imageWithContentsOfFile:spotlightIconMask];
+        
         // we need to create the mask from the spotlightIconMask's CGImage
-        CGImageRef maskRef = [[UIImage imageWithContentsOfFile:spotlightIconMask] CGImage];
+        CGImageRef maskRef = [iconMask CGImage];
         
         // coregraphics doesn't like anemone's icon masks, so we need to invert the alpha mask 
         CGFloat decode[] = { CGFloat(1), CGFloat(0),  // alpha (flipped)
@@ -859,7 +876,38 @@ static UIImage *createIcon(UIImage *icon, CGSize size) {
                            };
                              
         // now, we're going to create a mask using the properties of the original image, but we're going to use the custom decode array to flip the alpha channel
-        CGImageRef mask    =  CGImageCreate(CGImageGetWidth(maskRef), CGImageGetHeight(maskRef), CGImageGetBitsPerComponent(maskRef), CGImageGetBitsPerPixel(maskRef), CGImageGetBytesPerRow(maskRef), CGImageGetColorSpace(maskRef), CGImageGetBitmapInfo(maskRef), CGImageGetDataProvider(maskRef), decode, CGImageGetShouldInterpolate(maskRef), CGImageGetRenderingIntent(maskRef));
+        CGImageRef mask = CGImageCreate(CGImageGetWidth(maskRef), CGImageGetHeight(maskRef), CGImageGetBitsPerComponent(maskRef), CGImageGetBitsPerPixel(maskRef), CGImageGetBytesPerRow(maskRef), CGImageGetColorSpace(maskRef), CGImageGetBitmapInfo(maskRef), CGImageGetDataProvider(maskRef), decode, CGImageGetShouldInterpolate(maskRef), CGImageGetRenderingIntent(maskRef));
+        
+        // if we'll need it, create the inset mask as well
+        if ( insetMasked ) {
+            // push the current context
+            UIGraphicsPushContext(context);
+            // create an inset context with the specified size, non-opaque, and device-scaled
+            UIGraphicsBeginImageContextWithOptions(icon.size, NO, 0.0);
+            // get the inset context
+            CGContextRef insetContext = UIGraphicsGetCurrentContext();
+            // anti-alias, because we're clipping and resizing
+            CGContextSetShouldAntialias(insetContext, true);
+            CGContextSetAllowsAntialiasing(insetContext, true);
+            // draw a resized icon mask for the inset
+            [iconMask drawInRect:CGRectMake(0, 0, icon.size.width, icon.size.height)];
+            // and store it in our iconMask UIImage
+            iconMask = UIGraphicsGetImageFromCurrentImageContext(); 
+            // we need to create the inset mask from the resized iconMask's CGImage
+            CGImageRef maskRef = [iconMask CGImage];
+            // coregraphics doesn't like anemone's icon masks, but the alpha is already flipped above, so just create the image
+            CGFloat decode[] = { CGFloat(0), CGFloat(1),  // alpha (no change)
+                                 CGFloat(0), CGFloat(1),  // red   (no change)
+                                 CGFloat(0), CGFloat(1),  // green (no change)
+                                 CGFloat(0), CGFloat(1)   // blue  (no change)
+                               };
+            // now, we're going to create a bundle mask using the properties of the resized image, but we're going to use the custom decode array to flip the alpha channel
+            bundleMask = CGImageCreate(CGImageGetWidth(maskRef), CGImageGetHeight(maskRef), CGImageGetBitsPerComponent(maskRef), CGImageGetBitsPerPixel(maskRef), CGImageGetBytesPerRow(maskRef), CGImageGetColorSpace(maskRef), CGImageGetBitmapInfo(maskRef), CGImageGetDataProvider(maskRef), decode, CGImageGetShouldInterpolate(maskRef), CGImageGetRenderingIntent(maskRef));
+            // end the inset context
+            UIGraphicsEndImageContext();
+            // restore the previous context
+            UIGraphicsPopContext();
+        }
         
         // clip the context using the mask
         CGContextClipToMask(context, CGRectMake(0, 0, size.width, size.height), mask);
@@ -878,11 +926,93 @@ static UIImage *createIcon(UIImage *icon, CGSize size) {
     //CGContextFillRect(context, CGRectMake(0, 0, size.width, size.height));
     
     // draw the settings icon in a rectangle of the specified size
-    [background drawInRect:CGRectMake(0, 0, size.width, size.height)];
+    if ( useSettingsIcon ) {
+        [settingsIcon drawInRect:CGRectMake(0, 0, size.width, size.height) blendMode:kCGBlendModeNormal alpha:iconAlpha];
+    }
     
-    // draw the bundle icon in the corner of the rectangle of the specified size
-    // considered masking the bundle icon as well, but I don't feel like it's worth the performance overhead
-    [icon drawInRect:CGRectMake(size.width - icon.size.width - 1, size.height - icon.size.height - 1, icon.size.width, icon.size.height)];
+    if ( insetMono ) {
+        /*
+        // grayscale colorspace
+        CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceGray();
+        
+        
+        // Create bitmap content with current image size and grayscale colorspace
+        CGContextRef grayContext = CGBitmapContextCreate(nil, icon.size.width, icon.size.height, 8, 0, colorSpace, kCGImageAlphaNone);
+
+        // Draw image into current context, with specified rectangle
+        // using previously defined context (with grayscale colorspace)
+        CGContextDrawImage(grayContext, CGRectMake(0, 0, icon.size.width, icon.size.height), [icon CGImage]);
+
+        // Create bitmap image info from pixel data in current context
+        CGImageRef imageRef = CGBitmapContextCreateImage(grayContext);
+
+        // Release colorspace, context and bitmap information
+        CGColorSpaceRelease(colorSpace);
+        CGContextRelease(grayContext);
+        
+        // Create an alpha mask using only the alpha channel from the image.
+        grayContext = CGBitmapContextCreate(nil, icon.size.width, icon.size.height, 8, 0, nil, kCGImageAlphaOnly );
+        CGContextDrawImage(grayContext, CGRectMake(0, 0, icon.size.width, icon.size.height), [icon CGImage]);
+        CGImageRef mask = CGBitmapContextCreateImage(grayContext);
+
+        // Create a new UIImage object
+        icon = [UIImage imageWithCGImage:CGImageCreateWithMask(imageRef, mask)];
+        
+        // release the imageRef and mask
+        CGImageRelease(imageRef);
+        CGImageRelease(mask);
+        */
+            
+        CIImage *iconCIImage = [[CIImage alloc] initWithImage:icon];
+        CIImage *monoCIImage = [iconCIImage imageByApplyingFilter:@"CIColorControls" withInputParameters:@{kCIInputSaturationKey : @0.0}];
+        icon = [UIImage imageWithCIImage:monoCIImage scale:scale orientation:UIImageOrientationUp];
+        
+        [iconCIImage release];
+        iconCIImage = nil;
+    }
+    
+    if ( insetMasked ) {
+        // push the current context
+        UIGraphicsPushContext(context);
+        
+        // create an image context with the specified size, non-opaque, and device-scaled
+        UIGraphicsBeginImageContextWithOptions(icon.size, NO, 0.0);
+        // get the context
+        CGContextRef insetContext = UIGraphicsGetCurrentContext();
+        
+        // anti-alias, because we're clipping and resizing
+        CGContextSetShouldAntialias(insetContext, true);
+        CGContextSetAllowsAntialiasing(insetContext, true);
+        
+        if ( spotlightIconMask && bundleMask ) {
+            // clip the inset context using the bundle mask
+            CGContextClipToMask(insetContext, CGRectMake(0, 0, icon.size.width, icon.size.height), bundleMask);
+            // release the mask
+            CGImageRelease(bundleMask);
+        } else {
+            // re-round the corners with a UIBezierPath rounded rect to try to smooth out the edges
+            CGContextAddPath(insetContext, CGPathCreateCopy([UIBezierPath bezierPathWithRoundedRect:CGRectMake(0, 0, icon.size.width, icon.size.height) byRoundingCorners:UIRectCornerAllCorners cornerRadii:CGSizeMake(10.0f/57.0f * icon.size.width, icon.size.height)].CGPath));
+            // clip the context with the added path
+            CGContextClip(insetContext);
+        }
+        
+        // draw the inset
+        [icon drawInRect:CGRectMake(0, 0, icon.size.width, icon.size.height)];
+        // now get back the masked inset
+        icon = UIGraphicsGetImageFromCurrentImageContext();
+        // end the inset context
+        UIGraphicsEndImageContext();
+        // restore the previous context
+        UIGraphicsPopContext();
+    }
+    
+    if ( useSettingsIcon ) {
+        // draw the bundle icon in the corner of the rectangle of the specified size
+        [icon drawInRect:CGRectMake(size.width - icon.size.width - 1, size.height - icon.size.height - 1, icon.size.width, icon.size.height) blendMode:kCGBlendModeNormal alpha:insetAlpha];
+    } else {
+        // draw the icon centered without resizing.
+        [icon drawInRect:CGRectMake(size.width/2 - icon.size.width/2, size.height/2 - icon.size.height/2, icon.size.width, icon.size.height) blendMode:kCGBlendModeNormal alpha:insetAlpha];
+    }
     
     // get the new icon back from the current context
     UIImage *newIcon = UIGraphicsGetImageFromCurrentImageContext();  
@@ -993,13 +1123,35 @@ static UIImage *createIcon(UIImage *icon, CGSize size) {
 }
 %end
 
+static void loadSettings() {
+    // synchronize settings
+    CFPreferencesAppSynchronize(CFSTR("net.bearlike.adiuncta"));
+    
+    // get settings values
+    useSettingsIcon = !CFPreferencesCopyAppValue(CFSTR("UseSettingsIcon"), CFSTR("net.bearlike.adiuncta")) ? YES  : [(id)CFPreferencesCopyAppValue(CFSTR("UseSettingsIcon"),  CFSTR("net.bearlike.adiuncta")) boolValue];
+    iconAlpha       = !CFPreferencesCopyAppValue(CFSTR("IconAlpha"),       CFSTR("net.bearlike.adiuncta")) ? 1.0f : [(id)CFPreferencesCopyAppValue(CFSTR("IconAlpha"),        CFSTR("net.bearlike.adiuncta")) floatValue];
+    insetAlpha      = !CFPreferencesCopyAppValue(CFSTR("InsetAlpha"),      CFSTR("net.bearlike.adiuncta")) ? 1.0f : [(id)CFPreferencesCopyAppValue(CFSTR("InsetAlpha"),       CFSTR("net.bearlike.adiuncta")) floatValue];
+    insetMasked     = !CFPreferencesCopyAppValue(CFSTR("InsetMasked"),     CFSTR("net.bearlike.adiuncta")) ? YES  : [(id)CFPreferencesCopyAppValue(CFSTR("InsetMasked"),      CFSTR("net.bearlike.adiuncta")) boolValue];
+    insetMono       = !CFPreferencesCopyAppValue(CFSTR("InsetMono"),       CFSTR("net.bearlike.adiuncta")) ? NO   : [(id)CFPreferencesCopyAppValue(CFSTR("InsetMono"),        CFSTR("net.bearlike.adiuncta")) boolValue];
+}
+
+static void settingsChangedCallback(CFNotificationCenterRef center, void *observer, CFStringRef name, const void *object, CFDictionaryRef userInfo) {
+    // reload settings
+    loadSettings();
+    // clear the search model icon cache
+    [[objc_getClass("SPUISearchModel") sharedInstance] clearImageCache];
+}
+
 %ctor {
+    // load settings
+    loadSettings();
+    
     // get the device scale
-    if ( [UIScreen mainScreen].scale == 3.0f ) {
-        //scaleFactor = @"@3x";
-        scale = 3;
-    } else if ( [UIScreen mainScreen].scale == 2.0f ) {
-        //scaleFactor = @"@2x";
-        scale = 2;
-    }
+    scale = [UIScreen mainScreen].scale;
+    
+    // Register for the settings changed notification.
+    CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, settingsChangedCallback,
+                                    CFSTR("net.bearlike.adiuncta/settingschanged"), NULL,
+                                    CFNotificationSuspensionBehaviorDeliverImmediately);
+
 }
