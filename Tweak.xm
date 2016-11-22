@@ -52,6 +52,7 @@ static float         scale           = 1.0f;
 static NSString     *settingsIconPath;
 static NSString     *spotlightIconMask;
 
+static int           spotlightIndex  = 0;
 static BOOL          useSettingsIcon = YES;
 static float         iconAlpha       = 1.0f;
 static float         insetAlpha      = 1.0f;
@@ -882,27 +883,36 @@ static UIImage *createIcon(UIImage *icon, CGSize size) {
         if ( insetMasked ) {
             // push the current context
             UIGraphicsPushContext(context);
+            
             // create an inset context with the specified size, non-opaque, and device-scaled
             UIGraphicsBeginImageContextWithOptions(icon.size, NO, 0.0);
+
             // get the inset context
             CGContextRef insetContext = UIGraphicsGetCurrentContext();
+
             // anti-alias, because we're clipping and resizing
             CGContextSetShouldAntialias(insetContext, true);
             CGContextSetAllowsAntialiasing(insetContext, true);
+
             // draw a resized icon mask for the inset
             [iconMask drawInRect:CGRectMake(0, 0, icon.size.width, icon.size.height)];
+
             // and store it in our iconMask UIImage
             iconMask = UIGraphicsGetImageFromCurrentImageContext(); 
+
             // we need to create the inset mask from the resized iconMask's CGImage
             CGImageRef maskRef = [iconMask CGImage];
+
             // coregraphics doesn't like anemone's icon masks, but the alpha is already flipped above, so just create the image
             CGFloat decode[] = { CGFloat(0), CGFloat(1),  // alpha (no change)
                                  CGFloat(0), CGFloat(1),  // red   (no change)
                                  CGFloat(0), CGFloat(1),  // green (no change)
                                  CGFloat(0), CGFloat(1)   // blue  (no change)
                                };
+
             // now, we're going to create a bundle mask using the properties of the resized image, but we're going to use the custom decode array to flip the alpha channel
             bundleMask = CGImageCreate(CGImageGetWidth(maskRef), CGImageGetHeight(maskRef), CGImageGetBitsPerComponent(maskRef), CGImageGetBitsPerPixel(maskRef), CGImageGetBytesPerRow(maskRef), CGImageGetColorSpace(maskRef), CGImageGetBitmapInfo(maskRef), CGImageGetDataProvider(maskRef), decode, CGImageGetShouldInterpolate(maskRef), CGImageGetRenderingIntent(maskRef));
+
             // end the inset context
             UIGraphicsEndImageContext();
             // restore the previous context
@@ -930,39 +940,7 @@ static UIImage *createIcon(UIImage *icon, CGSize size) {
         [settingsIcon drawInRect:CGRectMake(0, 0, size.width, size.height) blendMode:kCGBlendModeNormal alpha:iconAlpha];
     }
     
-    if ( insetMono ) {
-        /*
-        // grayscale colorspace
-        CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceGray();
-        
-        
-        // Create bitmap content with current image size and grayscale colorspace
-        CGContextRef grayContext = CGBitmapContextCreate(nil, icon.size.width, icon.size.height, 8, 0, colorSpace, kCGImageAlphaNone);
-
-        // Draw image into current context, with specified rectangle
-        // using previously defined context (with grayscale colorspace)
-        CGContextDrawImage(grayContext, CGRectMake(0, 0, icon.size.width, icon.size.height), [icon CGImage]);
-
-        // Create bitmap image info from pixel data in current context
-        CGImageRef imageRef = CGBitmapContextCreateImage(grayContext);
-
-        // Release colorspace, context and bitmap information
-        CGColorSpaceRelease(colorSpace);
-        CGContextRelease(grayContext);
-        
-        // Create an alpha mask using only the alpha channel from the image.
-        grayContext = CGBitmapContextCreate(nil, icon.size.width, icon.size.height, 8, 0, nil, kCGImageAlphaOnly );
-        CGContextDrawImage(grayContext, CGRectMake(0, 0, icon.size.width, icon.size.height), [icon CGImage]);
-        CGImageRef mask = CGBitmapContextCreateImage(grayContext);
-
-        // Create a new UIImage object
-        icon = [UIImage imageWithCGImage:CGImageCreateWithMask(imageRef, mask)];
-        
-        // release the imageRef and mask
-        CGImageRelease(imageRef);
-        CGImageRelease(mask);
-        */
-            
+    if ( insetMono ) {      
         CIImage *iconCIImage = [[CIImage alloc] initWithImage:icon];
         CIImage *monoCIImage = [iconCIImage imageByApplyingFilter:@"CIColorControls" withInputParameters:@{kCIInputSaturationKey : @0.0}];
         icon = [UIImage imageWithCIImage:monoCIImage scale:scale orientation:UIImageOrientationUp];
@@ -1008,7 +986,7 @@ static UIImage *createIcon(UIImage *icon, CGSize size) {
     
     if ( useSettingsIcon ) {
         // draw the bundle icon in the corner of the rectangle of the specified size
-        [icon drawInRect:CGRectMake(size.width - icon.size.width - 1, size.height - icon.size.height - 1, icon.size.width, icon.size.height) blendMode:kCGBlendModeNormal alpha:insetAlpha];
+        [icon drawInRect:CGRectMake(size.width - icon.size.width - 3, size.height - icon.size.height - 3, icon.size.width, icon.size.height) blendMode:kCGBlendModeNormal alpha:insetAlpha];
     } else {
         // draw the icon centered without resizing.
         [icon drawInRect:CGRectMake(size.width/2 - icon.size.width/2, size.height/2 - icon.size.height/2, icon.size.width, icon.size.height) blendMode:kCGBlendModeNormal alpha:insetAlpha];
@@ -1022,6 +1000,8 @@ static UIImage *createIcon(UIImage *icon, CGSize size) {
     // return the new icon
     return newIcon;
 }
+
+%group iOS9
 
 %hook SpringBoard
 
@@ -1109,8 +1089,58 @@ static UIImage *createIcon(UIImage *icon, CGSize size) {
     
     // if we have new results to add...
     if ( [newSection resultsCount] > 0 ) {
-        // insert them into the existing sections
-        [arg1 insertObject:newSection atIndex:0];
+        
+        int count = [arg1 count];
+        BOOL foundTopHits = NO;
+        BOOL foundApplications = NO;
+        
+        int topHitsIndex = -1;
+        int applicationsIndex = -1;
+        
+        // if we're putting the results below either top hits or applications...
+        if ( spotlightIndex > 0 ) {
+            // loop the top two results to see if they match the category we want to insert our results below
+            for ( int i = 0; i < count && i < 2; i++ ) {
+                // if we found a match, bump the index and break the loop
+                if ( [[[arg1 objectAtIndex:i] category] isEqual:@"com.apple.spotlight.tophits"] )
+                    foundTopHits = YES;
+                    topHitsIndex = i;
+                    if ( spotlightIndex == 1 )
+                        break;
+                if ( [[[arg1 objectAtIndex:i] category] isEqual:@"com.apple.application"] ) {
+                    foundApplications = YES;
+                    applicationsIndex = i;
+                    if ( spotlightIndex == 2 )
+                        break;
+                }
+            }
+        }
+  
+        // if we found a matching category, insert the object below it
+        // this does not work 100% of the time.  Occasionally, the search results will be split up across calls
+        // so, for example, we'll get one array of results with only top hits, followed by a second array of
+        // results without top hits.  Weird...
+        switch ( spotlightIndex ) {
+            case 0:
+                [arg1 insertObject:newSection atIndex:0];
+                break;
+            case 1:  
+                if ( foundTopHits ) {
+                    [arg1 insertObject:newSection atIndex:topHitsIndex + 1];
+                } else {
+                    [arg1 insertObject:newSection atIndex:0];
+                }
+                break;
+            case 2:
+                if ( foundApplications ) {
+                    [arg1 insertObject:newSection atIndex:applicationsIndex + 1];
+                } else if ( foundTopHits) {
+                    [arg1 insertObject:newSection atIndex:topHitsIndex + 1];
+                } else {
+                    [arg1 insertObject:newSection atIndex:0];
+                }
+                break;
+        }
     }
     
     // return the sections either way
@@ -1123,11 +1153,14 @@ static UIImage *createIcon(UIImage *icon, CGSize size) {
 }
 %end
 
+%end
+
 static void loadSettings() {
     // synchronize settings
     CFPreferencesAppSynchronize(CFSTR("net.bearlike.adiuncta"));
     
     // get settings values
+    spotlightIndex  = !CFPreferencesCopyAppValue(CFSTR("SpotlightIndex"),  CFSTR("net.bearlike.adiuncta")) ? 0    : [(id)CFPreferencesCopyAppValue(CFSTR("SpotlightIndex"),  CFSTR("net.bearlike.adiuncta")) intValue];
     useSettingsIcon = !CFPreferencesCopyAppValue(CFSTR("UseSettingsIcon"), CFSTR("net.bearlike.adiuncta")) ? YES  : [(id)CFPreferencesCopyAppValue(CFSTR("UseSettingsIcon"),  CFSTR("net.bearlike.adiuncta")) boolValue];
     iconAlpha       = !CFPreferencesCopyAppValue(CFSTR("IconAlpha"),       CFSTR("net.bearlike.adiuncta")) ? 1.0f : [(id)CFPreferencesCopyAppValue(CFSTR("IconAlpha"),        CFSTR("net.bearlike.adiuncta")) floatValue];
     insetAlpha      = !CFPreferencesCopyAppValue(CFSTR("InsetAlpha"),      CFSTR("net.bearlike.adiuncta")) ? 1.0f : [(id)CFPreferencesCopyAppValue(CFSTR("InsetAlpha"),       CFSTR("net.bearlike.adiuncta")) floatValue];
@@ -1143,6 +1176,14 @@ static void settingsChangedCallback(CFNotificationCenterRef center, void *observ
 }
 
 %ctor {
+    
+    // If we're on iOS 9 or higher, initialize the iOS9 group...
+    if ([[[UIDevice currentDevice] systemVersion] floatValue] >= 9.0) {
+        //FSLog(@"iOS 9 configuration loaded succesfully.");
+        %init(iOS9);
+    // else we're on iOS 8.4.1 or lower, initialize the iOS8 group...
+    }
+    
     // load settings
     loadSettings();
     

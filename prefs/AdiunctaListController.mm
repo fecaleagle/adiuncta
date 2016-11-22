@@ -1,6 +1,7 @@
 #import <Preferences/Preferences.h>
 #import <notify.h>
 #import <objc/runtime.h>
+#include <spawn.h>
 
 extern "C" CFArrayRef CPBitmapCreateImagesFromData(CFDataRef cpbitmap, void*, int, void*);
 extern NSString* PSDeletionActionKey;
@@ -23,6 +24,7 @@ typedef enum PSCellType {
 	PSEditTextViewCell,
 } PSCellType;
 
+static int   spotlightIndex  = 0;
 static BOOL  useSettingsIcon = YES;
 static float iconAlpha       = 1.0f;
 static float insetAlpha      = 1.0f;
@@ -109,23 +111,27 @@ static KeyboardStateListener *sharedKeyboardInstance;
 
 @end
 
+/*
 @protocol PreferencesTableCustomView
 - (id)initWithSpecifier:(PSSpecifier *)specifier;
 - (CGFloat)preferredHeightForWidth:(CGFloat)width;
 @end
+*/
 
-@interface AdiunctaDefinitionCell : PSTableCell <PreferencesTableCustomView> {
-    UILabel *term;
-    UILabel *definition;
+@interface AdiunctaDefinitionCell : PSTableCell { // <PreferencesTableCustomView> {
+    //UILabel *term;
+    //UILabel *definition;
 }
 
 @end
 
 @implementation AdiunctaDefinitionCell
 
-- (id)initWithSpecifier:(PSSpecifier *)specifier
+//- (id)initWithSpecifier:(PSSpecifier *)specifier
+- (id)initWithStyle:(int)style reuseIdentifier:(NSString *)identifier specifier:(PSSpecifier *)specifier
 {
-    self = [super initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"Cell"];
+    //self = [super initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"Cell"];
+    self = [super initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"definitionCell" specifier:specifier];
     
     if (self) {
         
@@ -134,7 +140,7 @@ static KeyboardStateListener *sharedKeyboardInstance;
         CGRect termFrame = CGRectMake(0, 5, width, 40);
         CGRect definitionFrame = CGRectMake(0, 35, width, 60);
         
-        term = [[UILabel alloc] initWithFrame:termFrame];
+        UILabel *term = [[UILabel alloc] initWithFrame:termFrame];
         [term setNumberOfLines:1];
         [term setFont:[UIFont fontWithName:@"HelveticaNeue-UltraLight" size:48]];
         [term setText:@"Adiuncta"];
@@ -142,7 +148,7 @@ static KeyboardStateListener *sharedKeyboardInstance;
         [term setTextColor:[UIColor blackColor]];
         [term setTextAlignment:NSTextAlignmentCenter];
         
-        definition = [[UILabel alloc] initWithFrame:definitionFrame];
+        UILabel *definition = [[UILabel alloc] initWithFrame:definitionFrame];
         [definition setNumberOfLines:2];
         [definition setFont:[UIFont fontWithName:@"HelveticaNeue-Light" size:18]];
         [definition setText:@"noun, subst. pl. from adiungō\nattached, joined, yoked (as cattle)"];
@@ -183,10 +189,12 @@ static KeyboardStateListener *sharedKeyboardInstance;
     return self;
 }
 
+/*
 - (CGFloat)preferredHeightForWidth:(CGFloat)width {
 	// Return a custom cell height.
 	return 70.0f;
 }
+*/
 
 @end
 
@@ -330,7 +338,7 @@ static UIImage *createIcon(UIImage *icon, CGSize size, NSString *settingsIconPat
     
     if ( useSettingsIcon ) {
         // draw the bundle icon in the corner of the rectangle of the specified size
-        [icon drawInRect:CGRectMake(size.width - icon.size.width - 1, size.height - icon.size.height - 1, icon.size.width, icon.size.height) blendMode:kCGBlendModeNormal alpha:insetAlpha];
+        [icon drawInRect:CGRectMake(size.width - icon.size.width - 3, size.height - icon.size.height - 3, icon.size.width, icon.size.height) blendMode:kCGBlendModeNormal alpha:insetAlpha];
     } else {
         // draw the icon centered without resizing.
         [icon drawInRect:CGRectMake(size.width/2 - icon.size.width/2, size.height/2 - icon.size.height/2, icon.size.width, icon.size.height) blendMode:kCGBlendModeNormal alpha:insetAlpha];
@@ -345,12 +353,17 @@ static UIImage *createIcon(UIImage *icon, CGSize size, NSString *settingsIconPat
     return newIcon;
 }
 
-@interface AdiunctaPreviewCell : PSTableCell <PreferencesTableCustomView> {}
+@interface AdiunctaPreviewCell : PSTableCell { //<PreferencesTableCustomView> {
+}
 @end
 
 @implementation AdiunctaPreviewCell
-- (id)initWithSpecifier:(PSSpecifier *)specifier {
-	self = [super initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"Cell" specifier:specifier];
+//- (id)initWithSpecifier:(PSSpecifier *)specifier
+- (id)initWithStyle:(int)style reuseIdentifier:(NSString *)identifier specifier:(PSSpecifier *)specifier
+{
+	//self = [super initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"Cell" specifier:specifier];
+    self = [super initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"previewCell" specifier:specifier];
+        
 	if (self) {
 	    self.clipsToBounds = YES;
 	    //self.contentView.backgroundColor = [UIColor grayColor];
@@ -416,10 +429,12 @@ static UIImage *createIcon(UIImage *icon, CGSize size, NSString *settingsIconPat
 	return self;
 }
 
+/*
 - (CGFloat)preferredHeightForWidth:(CGFloat)width {
 	// Return a custom cell height.
 	return 100.0f;
 }
+*/
 @end
 
 @interface AdiunctaListController: PSListController { }
@@ -442,11 +457,22 @@ static UIImage *createIcon(UIImage *icon, CGSize size, NSString *settingsIconPat
         insetMasked     = !CFPreferencesCopyAppValue(CFSTR("InsetMasked"),     CFSTR("net.bearlike.adiuncta")) ? YES  : [(id)CFPreferencesCopyAppValue(CFSTR("InsetMasked"),      CFSTR("net.bearlike.adiuncta")) boolValue];
         insetMono       = !CFPreferencesCopyAppValue(CFSTR("InsetMono"),       CFSTR("net.bearlike.adiuncta")) ? NO   : [(id)CFPreferencesCopyAppValue(CFSTR("InsetMono"),        CFSTR("net.bearlike.adiuncta")) boolValue];
         
-        spec = [PSSpecifier preferenceSpecifierNamed:@"Adiuncta:" target:self set:nil get:nil detail:nil cell:PSGroupCell edit:nil];
-		[spec setProperty:@"AdiunctaDefinitionCell" forKey:@"headerCellClass"];
+        spotlightIndex  = !CFPreferencesCopyAppValue(CFSTR("SpotlightIndex"),  CFSTR("net.bearlike.adiuncta")) ? 0    : [(id)CFPreferencesCopyAppValue(CFSTR("SpotlightIndex"),   CFSTR("net.bearlike.adiuncta")) intValue];
+        
+        spec = [PSSpecifier preferenceSpecifierNamed:nil target:self set:nil get:nil detail:nil cell:PSStaticTextCell edit:nil];
+		[spec setProperty:[AdiunctaDefinitionCell class] forKey:@"cellClass"];
+        [spec setProperty:@"95" forKey:@"height"];
 		[specifiers addObject:spec];
         
-		spec = [PSSpecifier preferenceSpecifierNamed:@"Search Result Icons:" target:self set:nil get:nil detail:nil cell:PSGroupCell edit:nil];
+        spec = [PSSpecifier preferenceSpecifierNamed:@"Search Result Position:" target:self set:nil get:nil detail:nil cell:PSGroupCell edit:nil];
+		[specifiers addObject:spec];
+        
+        spec = [PSSpecifier preferenceSpecifierNamed:@"Place Below" target:self set:@selector(setValue:forSpecifier:) get:@selector(getValueForSpecifier:) detail:[PSListItemsController class] cell:PSLinkListCell edit:nil];
+		[spec setValues:@[@0, @1, @2] titles:@[@"Top", @"Top Hits", @"Applications"]];
+        [spec setIdentifier:@"spotlightIndex"];
+		[specifiers addObject:spec];
+        
+		spec = [PSSpecifier preferenceSpecifierNamed:@"Search Result Rendering:" target:self set:nil get:nil detail:nil cell:PSGroupCell edit:nil];
 		[specifiers addObject:spec];
 		
 		spec = [PSSpecifier preferenceSpecifierNamed:@"Use Settings Icon" target:self set:@selector(setValue:forSpecifier:) get:@selector(getValueForSpecifier:) detail:nil cell:PSSwitchCell edit:nil];
@@ -486,8 +512,12 @@ static UIImage *createIcon(UIImage *icon, CGSize size, NSString *settingsIconPat
 		[specifiers addObject:spec];
 		*/
         
-		spec = [PSSpecifier preferenceSpecifierNamed:@"Preview:" target:self set:nil get:nil detail:nil cell:PSGroupCell edit:nil];
-		[spec setProperty:@"AdiunctaPreviewCell" forKey:@"footerCellClass"];
+        spec = [PSSpecifier preferenceSpecifierNamed:@"Preview:" target:self set:nil get:nil detail:nil cell:PSGroupCell edit:nil];
+		[specifiers addObject:spec];
+        
+		spec = [PSSpecifier preferenceSpecifierNamed:nil target:self set:nil get:nil detail:nil cell:PSStaticTextCell edit:nil];
+		[spec setProperty:[AdiunctaPreviewCell class] forKey:@"cellClass"];
+        [spec setProperty:@"100" forKey:@"height"];
 		[specifiers addObject:spec];
         
 		spec = [PSSpecifier preferenceSpecifierNamed:@"Contribute:" target:self set:nil get:nil detail:nil cell:PSGroupCell edit:nil];
@@ -504,6 +534,8 @@ static UIImage *createIcon(UIImage *icon, CGSize size, NSString *settingsIconPat
 }
 
 - (void)applySettings {
+    [self dismissKeyboard];
+    
     // post notification to tweak
 	CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), CFSTR("net.bearlike.adiuncta/settingschanged"), NULL, NULL, TRUE);
     
@@ -514,10 +546,13 @@ static UIImage *createIcon(UIImage *icon, CGSize size, NSString *settingsIconPat
     // synchronize settings
     CFPreferencesAppSynchronize(CFSTR("net.bearlike.adiuncta"));
     // get value per identifier...
-    if ([[specifier identifier] isEqualToString:@"useSettingsIcon"]) {
+    if ([[specifier identifier] isEqualToString:@"spotlightIndex"]) {
+        spotlightIndex  = !CFPreferencesCopyAppValue(CFSTR("SpotlightIndex"),  CFSTR("net.bearlike.adiuncta")) ? 0    : [(id)CFPreferencesCopyAppValue(CFSTR("SpotlightIndex"),  CFSTR("net.bearlike.adiuncta")) intValue];
+        return [NSNumber numberWithInt:spotlightIndex];
+    } else if ([[specifier identifier] isEqualToString:@"useSettingsIcon"]) {
         useSettingsIcon = !CFPreferencesCopyAppValue(CFSTR("UseSettingsIcon"), CFSTR("net.bearlike.adiuncta")) ? YES  : [(id)CFPreferencesCopyAppValue(CFSTR("UseSettingsIcon"), CFSTR("net.bearlike.adiuncta")) boolValue];
         return [NSNumber numberWithBool:useSettingsIcon];
-	} else if ([[specifier identifier] isEqualToString:@"iconAlpha"]) {
+    } else if ([[specifier identifier] isEqualToString:@"iconAlpha"]) {
         iconAlpha       = !CFPreferencesCopyAppValue(CFSTR("IconAlpha"),       CFSTR("net.bearlike.adiuncta")) ? 1.0f : [(id)CFPreferencesCopyAppValue(CFSTR("IconAlpha"),       CFSTR("net.bearlike.adiuncta")) floatValue];
         NSString *value = [NSString stringWithFormat:@"%d%%", (int)(iconAlpha*100)];
         return value;
@@ -538,7 +573,10 @@ static UIImage *createIcon(UIImage *icon, CGSize size, NSString *settingsIconPat
 
 -(void)setValue:(id)value forSpecifier:(PSSpecifier*)specifier {
     // set value per identifier...
-    if ([[specifier identifier] isEqualToString:@"useSettingsIcon"]) {
+    if ([[specifier identifier] isEqualToString:@"spotlightIndex"]) {
+        spotlightIndex = [value intValue];
+         CFPreferencesSetAppValue(CFSTR("SpotlightIndex"), CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, &spotlightIndex), CFSTR("net.bearlike.adiuncta"));
+    } else if ([[specifier identifier] isEqualToString:@"useSettingsIcon"]) {
         useSettingsIcon = [value boolValue];
         CFPreferencesSetAppValue(CFSTR("UseSettingsIcon"), [value boolValue] ? kCFBooleanTrue : kCFBooleanFalse, CFSTR("net.bearlike.adiuncta"));
     } else if ([[specifier identifier] isEqualToString:@"iconAlpha"]) {       
